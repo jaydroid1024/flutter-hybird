@@ -1,0 +1,227 @@
+// This script is used to initialize the build in a module or plugin project.
+// During this phase, the script applies the Maven plugin and configures the
+// destination of the local repository.
+// The local repository will contain the AAR and POM files.
+
+void configureProject(Project project, String mavenUrl, String mavenUser, String mavenPwd, String version) {
+  if (!project.hasProperty("android")) {
+    throw new GradleException("Android property not found.")
+  }
+  if (!project.android.hasProperty("libraryVariants")) {
+    throw new GradleException("Can't generate AAR on a non Android library project.")
+  }
+
+  project.apply plugin: "maven"
+
+  // Snapshot versions include the timestamp in the artifact name.
+  // Therefore, remove the snapshot part, so new runs of `flutter build aar` overrides existing artifacts.
+  // This version isn't relevant in Flutter since the pub version is used
+  // to resolve dependencies.
+
+  project.version = version
+  if (mavenUrl.startsWith("file:")) {
+    //本地路径时，原逻辑
+    project.version = project.version.replace("-SNAPSHOT", "")
+  }
+
+
+  project.android.libraryVariants.all { variant ->
+    addAarTask(project, variant)
+  }
+
+  project.uploadArchives {
+    repositories {
+      mavenDeployer {
+        repository(url: mavenUrl) {
+          if (mavenUser != null) {
+            authentication(userName: mavenUser, password: mavenPwd)
+          }
+        }
+        //默认本地路径：
+        //repository(url: "file://${outputDir}/outputs/repo")
+      }
+    }
+  }
+  if (!project.property("is-plugin").toBoolean()) {
+    return
+  }
+
+  if (project.hasProperty('localEngineOut')) {
+    // TODO(egarciad): Support local engine.
+    // This most likely requires refactoring `flutter.gradle`, so the logic can be reused.
+    throw new GradleException(
+        "Local engine isn't supported when building the plugins as AAR. " +
+            "See: https://github.com/flutter/flutter/issues/40866")
+  }
+
+  // This is a Flutter plugin project. Plugin projects don't apply the Flutter Gradle plugin,
+  // as a result, add the dependency on the embedding.
+  project.repositories {
+    maven {
+      url "https://storage.googleapis.com/download.flutter.io"
+    }
+  }
+  String engineVersion = flutterEngineVersion()
+  project.dependencies {
+    // Add the embedding dependency.
+    //使用api方式打入aar
+    compileOnly("io.flutter:flutter_embedding_release:1.0.0-$engineVersion") {
+      //    api("io.flutter:flutter_embedding_release:1.0.0-$engineVersion") {
+      // We only need to expose io.flutter.plugin.*
+      // No need for the embedding transitive dependencies.
+      transitive = true
+    }
+  }
+}
+
+void configurePlugin(Project project, String outputDir, String mavenUser, String mavenPwd) {
+  if (!project.hasProperty("android")) {
+    // A plugin doesn't support the Android platform when this property isn't defined in the plugin.
+    return
+  }
+  //flutter plugin 版本号
+  File pubspecFile = project.file("../pubspec.yaml")
+  String versionLine = pubspecFile.readLines().find { line->
+    line.startsWith("version:")
+  }
+  def pluginVersion = versionLine.split(":")[1].trim()
+  println("configurePlugin: " + project.toString() + " v" + pluginVersion)
+  configureProject(project, outputDir, mavenUser, mavenPwd, pluginVersion)
+}
+
+void addAarTask(Project project, variant) {
+  String variantName = variant.name.capitalize()
+  String taskName = "assembleAar$variantName"
+  project.tasks.create(name: taskName) {
+    // This check is required to be able to configure the archives before `uploadArchives` runs.
+    if (!project.gradle.startParameter.taskNames.contains(taskName)) {
+      return
+    }
+    project.uploadArchives.repositories.mavenDeployer {
+      pom {
+        artifactId = "${project.name}_${variant.name.toLowerCase()}"
+      }
+    }
+    overrideDefaultPublishConfig(project, variant)
+    // Generate the Maven artifacts.
+    finalizedBy "uploadArchives"
+  }
+}
+
+// This method mimics the logic in AGP when `android.defaultPublishConfig` is set in `build.gradle`:
+// https://android.googlesource.com/platform/tools/base/+/studio-master-dev/build-system/gradle-core/src/main/java/com/android/build/gradle/internal/variant/VariantHelper.java
+//
+// Unfortunately, `android.defaultPublishConfig` cannot be overriden at this point since
+// AGP already run this code.
+void overrideDefaultPublishConfig(Project project, variant) {
+  String variantName = variant.name.capitalize()
+  Task bundle = project.tasks.findByName("bundle${variantName}Aar")
+  // gradle:3.2.0
+  if (bundle == null) {
+    bundle = project.tasks.findByName("bundle${variantName}") // gradle:3.1.0
+  }
+  if (bundle == null) {
+    throw new GradleException("Can't generate AAR for variant ${variantName}.")
+  }
+  // Clear the current archive artifacts since the artifacts are based on `android.defaultPublishConfig`.
+  project.configurations["archives"].artifacts.clear()
+  // Add the artifact that will be published.
+  project.artifacts.add("archives", bundle)
+
+  def scopeMappings = project.uploadArchives.repositories.mavenDeployer.pom.scopeMappings
+  // Clear the scope mappings added by AGP since they are based on the current `android.defaultPublishConfig`.
+  scopeMappings.mappings.clear()
+  // Add the new mappings.
+  for (Configuration configuration : flattenConfiguration(variant.runtimeConfiguration)) {
+    scopeMappings.addMapping(/* priority = */ 300, configuration, "compile")
+  }
+}
+
+Set<Configuration> flattenConfiguration(Configuration configuration) {
+  Set<Configuration> configs = [configuration]
+  for (Configuration extend : configuration.extendsFrom) {
+    configs.addAll(flattenConfiguration(extend))
+  }
+  return configs
+}
+
+projectsEvaluated {
+  assert rootProject.hasProperty("is-plugin")
+  if (rootProject.property("is-plugin").toBoolean()) {
+    assert rootProject.hasProperty("maven-url")
+    // In plugin projects, the root project is the plugin.
+    configureProject(rootProject, rootProject.property("maven-url"),
+        rootProject.property("maven-user"), rootProject.property("maven-pwd"),
+        project.property("buildNumber")
+    )
+    return
+  }
+  // The module project is the `:flutter` subproject.
+  Project moduleProject = rootProject.subprojects.find { it.name == "flutter" }
+
+  assert moduleProject != null
+  assert moduleProject.hasProperty("maven-url")
+  configureProject(moduleProject, moduleProject.property("maven-url"),
+      moduleProject.property("maven-user"), moduleProject.property("maven-pwd"),
+      moduleProject.property("buildNumber")
+  )
+
+  // Gets the plugin subprojects.
+  Set<Project> modulePlugins = rootProject.subprojects.findAll {
+    it.name != "flutter" && it.name != "app"
+  }
+  // When a module is built as a Maven artifacts, plugins must also be built this way
+  // because the module POM's file will include a dependency on the plugin Maven artifact.
+  // This is due to the Android Gradle Plugin expecting all library subprojects to be published
+  // as Maven artifacts.
+  String mavenUrl = moduleProject.property("maven-url")
+  String version = moduleProject.property("buildNumber")
+
+  println("Version: $version")
+  println("MavenUrl: " + mavenUrl)
+
+  //输出 配置
+  String buildMode = moduleProject.gradle.startParameter
+      .taskNames.find { it.startsWith("assembleAar") }.substring(11)
+  println("BuildMode: $buildMode")
+
+  println("================================================================================")
+  //配置插件
+  modulePlugins.each { pluginProject ->
+    configurePlugin(pluginProject, mavenUrl,
+        moduleProject.property("maven-user"), moduleProject.property("maven-pwd"))
+    moduleProject.android.libraryVariants.all { variant ->
+      // Configure the `assembleAar<variantName>` task for each plugin's projects and make
+      // the module's equivalent task depend on the plugin's task.
+      String variantName = variant.name.capitalize()
+      moduleProject.tasks.findByPath("assembleAar$variantName")
+          .dependsOn(pluginProject.tasks.findByPath("assembleAar$variantName"))
+    }
+  }
+  //结束
+  println("================================================================================")
+
+  String mUrl = mavenUrl
+  if (mavenUrl.startsWith("file://")) {
+    mUrl = mavenUrl.substring(7)
+  }
+
+  String groupId = moduleProject.group
+
+  println("""
+1. 添加maven地址
+repositories {
+  maven {
+      url '${mUrl}'
+  }
+  maven {
+      url 'https://storage.googleapis.com/download.flutter.io'
+  }
+}
+2. 添加依赖
+
+dependencies {
+  implementation '${groupId}:flutter_${buildMode.toLowerCase()}:${version}'
+}
+""")
+}

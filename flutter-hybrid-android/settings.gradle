@@ -1,0 +1,94 @@
+import javax.naming.Binding
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        jcenter() // Warning: this repository is going to shut down soon
+        maven {
+            credentials {
+                username '611c80bd7920cba1bd4cc0e4'
+                password 'sjWP3g-qaQll'
+            }
+            url 'https://packages.aliyun.com/maven/repository/2129792-snapshot-ijqMYZ/'
+        }
+
+        String storageUrl = System.env.FLUTTER_STORAGE_BASE_URL ?: "https://storage.googleapis.com"
+        println "storageUrl: " + storageUrl
+        maven {
+            url "$storageUrl/download.flutter.io"
+        }
+    }
+}
+rootProject.name = "flutter-hybrid-android"
+include ':app'
+
+
+
+//以module方式接入首先在Android工程的settings.gradle加入:
+//setBinding(new Binding([gradle: this]))
+//evaluate(new File(
+//        settingsDir.parentFile,
+//        'my_flutter/.android/include_flutter.groovy'    //注意这边flutter module路径的正确性
+//))
+
+//分析
+//setBinding和evaluate都是groovy语法，这里所做的事就是运行 include_flutter.groovy 脚本；而setBinding的作用是把gradle环境传入include_flutter.groovy内（因为里面需要使用到gradle环境）。运行groovy文件，文件运行在一个Script对象中，Script有一个属性binding，内部存储了当前环境的变量（包括当前脚本声明的变量与启动脚本传入的参数），evaluate执行时会把当前脚本的binding传入下一个脚本。下面是include_flutter.groovy中的关键代码:
+
+//include_flutter.groovy 主要做了两件事情：添加flutter module到Android工程中，导入module_plugin_loader.gradle脚本片段
+//def scriptFile = getClass().protectionDomain.codeSource.location.toURI()
+//def flutterProjectRoot = new File(scriptFile).parentFile.parentFile
+//
+//gradle.include ":flutter"
+//gradle.project(":flutter").projectDir = new File(flutterProjectRoot, ".android/Flutter")
+//
+//def localPropertiesFile = new File(flutterProjectRoot, ".android/local.properties")
+//def properties = new Properties()
+//
+//assert localPropertiesFile.exists(), "❗️The Flutter module doesn't have a `$localPropertiesFile` file." +
+//                                     "\nYou must run `flutter pub get` in `$flutterProjectRoot`."
+//localPropertiesFile.withReader("UTF-8") { reader -> properties.load(reader) }
+//
+//def flutterSdkPath = properties.getProperty("flutter.sdk")
+//assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+//gradle.apply from: "$flutterSdkPath/packages/flutter_tools/gradle/module_plugin_loader.gradle"
+
+
+
+//module_plugin_loader.gradle 添加所有插件module到Android工程中
+//import groovy.json.JsonSlurper
+//def moduleProjectRoot = project(':flutter').projectDir.parentFile.parentFile
+//// Note: if this logic is changed, also change the logic in app_plugin_loader.gradle.
+//def pluginsFile = new File(moduleProjectRoot, '.flutter-plugins-dependencies')
+//if (pluginsFile.exists()) {
+//    def object = new JsonSlurper().parseText(pluginsFile.text)
+//    assert object instanceof Map
+//    assert object.plugins instanceof Map
+//    assert object.plugins.android instanceof List
+//    // Includes the Flutter plugins that support the Android platform.
+//    object.plugins.android.each { androidPlugin ->
+//        assert androidPlugin.name instanceof String
+//        assert androidPlugin.path instanceof String
+//        def pluginDirectory = new File(androidPlugin.path, 'android')
+//        assert pluginDirectory.exists()
+//        include ":${androidPlugin.name}"
+//        project(":${androidPlugin.name}").projectDir = pluginDirectory
+//    }
+//}
+//
+//gradle.getGradle().projectsLoaded { g ->
+//    g.rootProject.beforeEvaluate { p ->
+//        def _mainModuleName = binding.variables['mainModuleName']
+//        if (_mainModuleName != null && !_mainModuleName.empty) {
+//            p.ext.mainModuleName = _mainModuleName
+//        }
+//    }
+//    g.rootProject.afterEvaluate { p ->
+//        p.subprojects { sp ->
+//            if (sp.name != 'flutter') {
+//                sp.evaluationDependsOn(':flutter')
+//            }
+//        }
+//    }
+//}
