@@ -17,7 +17,11 @@ cd .android
 
 
 
-# 执行：sh dev_publish_maven.sh
+# 执行：
+# cd script
+# sh build_publish_maven.sh
+# 指定版本
+# flutter build aar --build-number 1.0.1
 #
 #参数说明
 #-Pmaven-url 可以是本地路径，也可为远程地址
@@ -30,3 +34,5 @@ cd .android
 #-PbuildNumber=1.0.0 为版本号
 #
 #最后 assembleAarRelease 为打包类型，assembleAarDebug, assembleAarProfile
+
+

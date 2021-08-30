@@ -9,6 +9,8 @@
       <map>
         <entry key="app/src/main/res/layout/activity_main.xml" value="0.1193239152371342" />
         <entry key="app/src/main/res/layout/fragment_dashboard.xml" value="0.14764492753623187" />
+        <entry key="app/src/main/res/layout/fragment_flutter_view.xml" value="0.18614130434782608" />
+        <entry key="app/src/main/res/layout/fragment_notifications.xml" value="0.1526268115942029" />
       </map>
     </option>
   </component>

@@ -25,7 +25,7 @@ android {
             initWith debug
         }
     }
- 
+
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -53,10 +53,12 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
+    implementation "com.google.code.gson:gson:2.8.5"
 
+    def flutter_module_version = '1.0.6'
     //flutter module
-    debugImplementation 'com.jay.flutter_hybrid_module:flutter_debug:1.0.0'
-    profileImplementation 'com.jay.flutter_hybrid_module:flutter_profile:1.0.0'
-    releaseImplementation 'com.jay.flutter_hybrid_module:flutter_release:1.0.0'
+    debugImplementation "com.jay.flutter_hybrid_module:flutter_debug:$flutter_module_version"
+    profileImplementation "com.jay.flutter_hybrid_module:flutter_profile:$flutter_module_version"
+    releaseImplementation "com.jay.flutter_hybrid_module:flutter_release:$flutter_module_version"
 
 }

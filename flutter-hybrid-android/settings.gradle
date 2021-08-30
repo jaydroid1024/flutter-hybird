@@ -1,11 +1,11 @@
-import javax.naming.Binding
-
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
         jcenter() // Warning: this repository is going to shut down soon
+
+//        aliyun repo
         maven {
             credentials {
                 username '611c80bd7920cba1bd4cc0e4'
@@ -14,16 +14,30 @@ dependencyResolutionManagement {
             url 'https://packages.aliyun.com/maven/repository/2129792-snapshot-ijqMYZ/'
         }
 
+//        flutter repo
         String storageUrl = System.env.FLUTTER_STORAGE_BASE_URL ?: "https://storage.googleapis.com"
         println "storageUrl: " + storageUrl
         maven {
             url "$storageUrl/download.flutter.io"
         }
+
+//        local repo
+        def localProperties = new Properties()
+        def localPropertiesFile = new File('local.properties')
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
+        }
+        def localMavenPath = localProperties.getProperty('local.maven.path')
+        println "localMavenPath: " + localMavenPath
+        if (localMavenPath != null) {
+            maven {
+                url localMavenPath
+            }
+        }
     }
 }
 rootProject.name = "flutter-hybrid-android"
 include ':app'
-
 
 
 //以module方式接入首先在Android工程的settings.gradle加入:
@@ -53,7 +67,6 @@ include ':app'
 //def flutterSdkPath = properties.getProperty("flutter.sdk")
 //assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
 //gradle.apply from: "$flutterSdkPath/packages/flutter_tools/gradle/module_plugin_loader.gradle"
-
 
 
 //module_plugin_loader.gradle 添加所有插件module到Android工程中

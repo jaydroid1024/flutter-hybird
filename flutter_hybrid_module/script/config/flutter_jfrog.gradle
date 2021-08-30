@@ -1,0 +1,73 @@
+import com.sun.tools.classfile.Dependency
+
+task androidSourcesJar(type: Jar) {
+    classifier = 'sources'
+    from android.sourceSets.main.java.srcDirs
+}
+
+assemble.dependsOn androidSourcesJar
+
+publishing {
+    publications {
+        aar(MavenPublication) {
+            groupId = GROUP
+            version = VERSION_NAME
+            artifactId = project.name
+            artifact("$buildDir/outputs/aar/${project.getName()}-release.aar")
+            artifact androidSourcesJar
+
+            pom.withXml {
+                def dependenciesNode = asNode().appendNode('dependencies')
+
+                def compileTimeDependencies =
+                        configurations.implementation.allDependencies.withType(ModuleDependency) +
+                                configurations.releaseImplementation.allDependencies.withType(ModuleDependency)
+
+                appendDependencies(compileTimeDependencies, dependenciesNode)
+            }
+        }
+    }
+}
+artifactory {
+    contextUrl = MAVEN_URL
+    publish {
+        repository {
+            repoKey = 'gradle-dev-local'
+            username = MAVEN_ACCOUNT_NAME
+            password = MAVEN_ACCOUNT_PWD
+        }
+        defaults {
+            // Tell the Artifactory Plugin which artifacts should be published to Artifactory.
+            publications('aar')
+            publishArtifacts = true
+            // Properties to be attached to the published artifacts.
+            properties = ['qa.level': 'basic', 'dev.team': 'core']
+            // Publish generated POM files to Artifactory (true by default)
+            publishPom = true
+        }
+    }
+}
+
+ext {
+    appendDependencies = { Set<Dependency> compileTimeDependencies, dependenciesNode ->
+
+        compileTimeDependencies.each {
+            // 过滤library引用
+            if (it.version != "unspecified") {
+                def dependencyNode = dependenciesNode.appendNode('dependency')
+                dependencyNode.appendNode('groupId', it.group)
+                dependencyNode.appendNode('artifactId', it.name)
+                dependencyNode.appendNode('version', it.version)
+
+                if (!it.excludeRules.isEmpty()) {
+                    def exclusionsNode = dependencyNode.appendNode('exclusions')
+                    it.excludeRules.each { rule ->
+                        def exclusionNode = exclusionsNode.appendNode('exclusion')
+                        exclusionNode.appendNode('groupId', rule.group)
+                        exclusionNode.appendNode('artifactId', rule.module ?: '*')
+                    }
+                }
+            }
+        }
+    }
+}

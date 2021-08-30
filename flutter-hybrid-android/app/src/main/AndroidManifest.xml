@@ -28,6 +28,7 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity android:name=".flutter.FlutterHostActivity" />
 
     </application>
 

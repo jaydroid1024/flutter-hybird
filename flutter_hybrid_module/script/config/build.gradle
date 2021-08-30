@@ -1,0 +1,35 @@
+buildscript {
+    repositories {
+        google()
+        jcenter()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:3.5.0'
+        classpath "org.jfrog.buildinfo:build-info-extractor-gradle:4.8.1"
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        jcenter()
+    }
+    apply plugin: 'com.jfrog.artifactory'
+    apply plugin: 'maven-publish'
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+
+subprojects {
+    project.afterEvaluate {
+        project.plugins.withId('com.android.library') {
+            project.group = GROUP
+            project.version = VERSION_NAME
+            def mavenScriptPath = project.rootProject.file('./config/flutter_jfrog.gradle')
+            project.apply from: mavenScriptPath
+        }
+    }
+}

@@ -9,6 +9,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import com.jay.flutter_hybrid_android.databinding.FragmentDashboardBinding
+import com.jay.flutter_hybrid_android.flutter.engine.FlutterHelper
 import io.flutter.embedding.android.FlutterActivity
 
 class DashboardFragment : Fragment() {
@@ -43,11 +44,10 @@ class DashboardFragment : Fragment() {
     }
 
     private fun onClick() {
-
         startActivity(
             activity?.let {
                 FlutterActivity
-                    .withCachedEngine("my_engine_id")
+                    .withCachedEngine(FlutterHelper.FLUTTER_ENGINE)
                     .build(it)
             }
         )
